@@ -1,0 +1,141 @@
+<!-- ghibgen/templates/index.html -->
+{% extends "base.html" %}
+{% block title %}Create · Ghibli Image Generator{% endblock %}
+
+{% block content %}
+<div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+  <!-- LEFT: FORM -->
+  <section class="glass md:col-span-2 p-6">
+    <h2 class="font-semibold text-lg mb-4">Create Image</h2>
+    <form method="post" enctype="multipart/form-data" class="space-y-6">
+      {% csrf_token %}
+
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
+        <div class="card">
+          <label class="block text-sm font-semibold mb-2">Preset</label>
+          <select name="preset" class="field select">
+            <option value="balanced" {% if form.data.preset == "balanced" %}selected{% endif %}>Balanced</option>
+            <option value="speed" {% if form.data.preset == "speed" %}selected{% endif %}>Speed</option>
+            <option value="quality" {% if form.data.preset == "quality" %}selected{% endif %}>Quality</option>
+            <option value="faithful" {% if form.data.preset == "faithful" %}selected{% endif %}>Faithful (img→img)</option>
+            <option value="stylized" {% if form.data.preset == "stylized" %}selected{% endif %}>Stylized (img→img)</option>
+          </select>
+          <p class="help text-xs text-slate-400 mt-1">Pick once; you can still override guidance/steps/strength below.</p>
+        </div>
+      </div>
+
+      <div class="card">
+        <label class="block text-sm font-semibold mb-2">Prompt</label>
+        <input name="prompt" class="field" placeholder="A cozy village at dusk with lanterns..." required />
+      </div>
+
+      <div class="card">
+        <label class="block text-sm font-semibold mb-2">Initial image (optional)</label>
+        <input type="file" name="init_image" accept="image/*" class="field" />
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
+        <div class="card">
+          <label class="block text-sm font-semibold mb-2">Strength (img2img)</label>
+          <input type="number" step="0.05" min="0.05" max="1.0" name="strength" value="0.6" class="field" />
+        </div>
+        <div class="card">
+          <label class="block text-sm font-semibold mb-2">Guidance</label>
+          <input type="number" step="0.1" min="1" max="20" name="guidance_scale" value="7.5" class="field" />
+        </div>
+        <div class="card">
+          <label class="block text-sm font-semibold mb-2">Steps</label>
+          <input type="number" min="6" max="60" name="num_inference_steps" value="18" class="field" />
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+        <div class="card">
+          <label class="block text-sm font-semibold mb-2">Aspect (text-to-image)</label>
+          <select name="aspect" class="field select">
+            <option value="1:1">Square (1:1)</option>
+            <option value="3:2" selected>Landscape (3:2)</option>
+            <option value="16:9">Wide (16:9)</option>
+            <option value="4:5">Portrait (4:5)</option>
+          </select>
+        </div>
+        <div class="card">
+          <label class="block text-sm font-semibold mb-2">Seed</label>
+          <input name="seed" class="field" placeholder="(optional)" />
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+        <div class="card">
+          <label class="block text-sm font-semibold mb-2">Negative prompt</label>
+          <input name="negative_prompt" class="field" placeholder="low quality, text, watermark" />
+        </div>
+        <div class="card">
+          <label class="block text-sm font-semibold mb-2">LoRA (optional)</label>
+          <input name="lora" class="field" placeholder="local path or HF repo id" />
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
+        <div class="card">
+          <label class="block text-sm font-semibold mb-2">Upscale mode</label>
+          <select name="upscale_mode" class="field select">
+            <option value="auto" selected>Auto (Real-ESRGAN → Lanczos)</option>
+            <option value="realesrgan">Real-ESRGAN</option>
+            <option value="lanczos">Lanczos (fast)</option>
+            <option value="off">Off</option>
+          </select>
+        </div>
+        <div class="card">
+          <label class="block text-sm font-semibold mb-2">Upscale factor</label>
+          <select name="upscale_factor" class="field select">
+            <option value="2" selected>2×</option>
+            <option value="4">4×</option>
+          </select>
+        </div>
+        <div class="card">
+          <label class="block text-sm font-semibold mb-2">—</label>
+          <p class="help text-xs text-slate-400">2× is a great speed/quality trade-off.</p>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-3">
+        <button class="btn" type="submit">Generate</button>
+        <a href="{% url 'ghibgen:index' %}" class="btn secondary">Clear</a>
+      </div>
+
+      {% if error %}
+        <div class="mt-4 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-200">{{ error }}</div>
+      {% endif %}
+    </form>
+  </section>
+
+  <!-- RIGHT: PREVIEW -->
+  <aside class="glass p-6">
+    <h2 class="font-semibold text-lg mb-4">Preview</h2>
+    <div class="preview">
+      {% if img_url %}
+        <img src="{{ img_url }}" alt="Generated image" />
+      {% else %}
+        <span class="text-slate-400 text-sm">Your image will appear here</span>
+      {% endif %}
+    </div>
+    {% if img_url %}
+      <div class="mt-4 flex gap-3">
+        <a href="{{ img_url }}" class="btn secondary" download>Download</a>
+        <a href="{{ img_url }}" class="btn secondary" target="_blank" rel="noopener">Open</a>
+      </div>
+
+      {% if used %}
+      <div class="mt-4 text-xs text-slate-300 space-y-1">
+        <div class="font-semibold text-slate-200">Parameters used</div>
+        <div>Mode: {{ used.mode }} · Preset: {{ used.preset }} · Seed: <span class="font-mono">{{ used.seed }}</span></div>
+        <div>Guidance: {{ used.guidance }} · Steps: {{ used.steps }}</div>
+        <div>Aspect: {{ used.aspect }} · Upscale: {{ used.upscale_mode }} ×{{ used.upscale_factor }}</div>
+        <div>LoRA: {{ used.lora }}</div>
+      </div>
+      {% endif %}
+    {% endif %}
+  </aside>
+</div>
+{% endblock %}
